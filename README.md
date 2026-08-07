@@ -75,11 +75,20 @@ niet levert.
 deze pin. Bij een Vaultwarden-upgrade: eerst opnieuw testen voordat je de
 CLI-pin optrekt.
 
-Tweede addertje: `bw config server` weigert te wijzigen zolang de CLI al
+**Tweede addertje**: `bw config server` weigert te wijzigen zolang de CLI al
 ingelogd is ("Logout required before server config update") — het lokale
 `bw`-datadir (`~/.config/Bitwarden CLI` / `%APPDATA%\Bitwarden CLI`) onthoudt
 de sessie ook tussen verschillende CLI-versies in. Altijd `bw logout`
 (fouten negeren) vóór `bw config server` in scripts.
+
+**Derde addertje**: `node:20-alpine` als base image laat de build wel
+slagen, maar Playwright's Chromium draait niet betrouwbaar op musl
+libc/Alpine, en `playwright install --with-deps` kent alleen `apt`, geen
+`apk`. Ontdekt pas bij de eerste Portainer-deploy (lokaal getest zonder
+Docker, dus dit verschil bleef onzichtbaar tot de echte build). Fix:
+`mcr.microsoft.com/playwright:v1.48.0-jammy` als base image (zelfde familie
+als `playwright-amazon-mcp`/`playwright-bol-mcp`), Chromium + OS-deps al
+ingebakken.
 
 ## Beveiligingsnotities
 
