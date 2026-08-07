@@ -1,0 +1,23 @@
+services:
+  vault-broker-mcp:
+    build: .
+    image: vault-broker-mcp:latest
+    container_name: vault-broker-mcp
+    restart: unless-stopped
+    environment:
+      BW_SERVER_URL: ${BW_SERVER_URL}
+      BW_CLIENTID: ${BW_CLIENTID}
+      BW_CLIENTSECRET: ${BW_CLIENTSECRET}
+      BW_MASTERPASSWORD: ${BW_MASTERPASSWORD}
+      VAULTWARDEN_ORG_ID: ${VAULTWARDEN_ORG_ID}
+      VAULTWARDEN_COLLECTION_ID: ${VAULTWARDEN_COLLECTION_ID}
+      MCP_SSE_SECRET: ${MCP_SSE_SECRET}
+    networks:
+      - hassio
+    # Bewust GEEN poort-publish naar NPM/internet toe — dit is een
+    # secrets-gateway, alleen intern op het hassio-netwerk (of via
+    # Tailscale) bereikbaar. Zie README "Beveiligingsnotities".
+
+networks:
+  hassio:
+    external: true
