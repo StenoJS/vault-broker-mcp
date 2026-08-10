@@ -14,9 +14,11 @@ services:
       MCP_SSE_SECRET: ${MCP_SSE_SECRET}
     networks:
       - hassio
-    # Bewust GEEN poort-publish naar NPM/internet toe — dit is een
-    # secrets-gateway, alleen intern op het hassio-netwerk (of via
-    # Tailscale) bereikbaar. Zie README "Beveiligingsnotities".
+    ports:
+      - "8933:3000"
+    # Poort is bereikbaar op het Tailscale-adres van de host, niet via NPM
+    # naar het publieke internet — dit is een secrets-gateway. Zie README
+    # "Beveiligingsnotities".
 
 networks:
   hassio:
