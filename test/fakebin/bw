@@ -7,7 +7,7 @@ const args = process.argv.slice(2);
 st.argvLog.push(args);
 const save = () => fs.writeFileSync(f, JSON.stringify(st));
 const [a, b] = args;
-if (a === "config" || a === "login" || a === "sync") { save(); process.exit(0); }
+if (a === "config" || a === "login" || a === "logout" || a === "sync") { save(); process.exit(0); }
 if (a === "unlock") { save(); process.stdout.write("SESSIONKEY"); process.exit(0); }
 if (a === "list" && b === "items") {
   save();

@@ -25,7 +25,21 @@ import { z } from "zod";
 import { generatePassword } from "./generate.js";
 import { injectIntoStack, parseAllowedStacks, VAR_NAME_RE } from "./portainer.js";
 
-const run = promisify(execFile);
+const execFileP = promisify(execFile);
+
+// Wrapper that never lets the command line (which can contain the bw session
+// key) end up in an error message that is returned to the model.
+async function run(cmd, args, opts = {}) {
+  try {
+    return await execFileP(cmd, args, { maxBuffer: 16 * 1024 * 1024, ...opts });
+  } catch (err) {
+    const detail = String(err.stderr || "").trim().split("\n")[0].slice(0, 200);
+    const reason = err.killed ? "timed out" : detail || `exit code ${err.code}`;
+    const e = new Error(`bw ${args[0]} ${args[1] ?? ""}`.trim() + `: ${reason}`);
+    e.stderr = err.stderr;
+    throw e;
+  }
+}
 
 const {
   BW_SERVER_URL,
@@ -60,27 +74,36 @@ let loginEnabled = ENABLE_LOGIN === "true";
 // returned in any tool response.
 let bwSessionKey = null;
 
-async function bwUnlock() {
-  if (bwSessionKey) return bwSessionKey;
+let bwUnlocking = null;
 
-  await run("bw", ["config", "server", BW_SERVER_URL]);
+function bwUnlock() {
+  if (bwSessionKey) return Promise.resolve(bwSessionKey);
+  // One unlock at a time; parallel calls share the same attempt.
+  bwUnlocking ??= doUnlock().finally(() => { bwUnlocking = null; });
+  return bwUnlocking;
+}
 
-  try {
-    await run("bw", ["login", "--apikey"], {
-      env: { ...process.env, BW_CLIENTID, BW_CLIENTSECRET },
-    });
-  } catch (err) {
-    // "You are already logged in" is not fatal — bw exits non-zero for it.
-    if (!/already logged in/i.test(err.stderr ?? "")) throw err;
-  }
+async function doUnlock() {
+  // bw keeps its login state on disk between process restarts, and refuses
+  // `config server` while logged in. Always start from a clean state.
+  try { await run("bw", ["logout"], { timeout: 30000 }); } catch { /* not logged in */ }
 
-  const { stdout } = await run("bw", ["unlock", "--passwordenv", "BW_MASTERPASSWORD", "--raw"], {
-    env: { ...process.env, BW_MASTERPASSWORD },
+  await run("bw", ["config", "server", BW_SERVER_URL], { timeout: 30000 });
+  await run("bw", ["login", "--apikey", "--nointeraction"], {
+    env: { ...process.env, BW_CLIENTID, BW_CLIENTSECRET },
+    timeout: 60000,
   });
-  bwSessionKey = stdout.trim();
 
-  await run("bw", ["sync", "--session", bwSessionKey]);
-  return bwSessionKey;
+  const { stdout } = await run(
+    "bw",
+    ["unlock", "--passwordenv", "BW_MASTERPASSWORD", "--raw", "--nointeraction"],
+    { env: { ...process.env, BW_MASTERPASSWORD }, timeout: 60000 }
+  );
+  const key = stdout.trim();
+
+  await run("bw", ["sync", "--session", key], { timeout: 120000 });
+  bwSessionKey = key;
+  return key;
 }
 
 // Runs `bw` with the JSON payload on stdin, so secrets never appear in the
