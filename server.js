@@ -30,9 +30,16 @@ const execFileP = promisify(execFile);
 // Wrapper that never lets the command line (which can contain the bw session
 // key) end up in an error message that is returned to the model.
 async function run(cmd, args, opts = {}) {
-  const { input, ...rest } = opts;
+  const { input, env, ...rest } = opts;
   try {
-    const p = execFileP(cmd, args, { maxBuffer: 16 * 1024 * 1024, ...rest });
+    const p = execFileP(cmd, args, {
+      maxBuffer: 16 * 1024 * 1024,
+      timeout: 90000,
+      ...rest,
+      // BW_NOINTERACTION: with an invalid session `bw` would otherwise wait
+      // for the master password on stdin forever instead of failing.
+      env: { ...process.env, ...env, BW_NOINTERACTION: "true" },
+    });
     if (input !== undefined) p.child.stdin.end(input);
     return await p;
   } catch (err) {
@@ -85,7 +92,9 @@ async function bwUnlock() {
   // the session expired: drop it and do a full login + unlock.
   if (bwSessionKey) {
     try {
-      await run("bw", ["sync", "--session", bwSessionKey, "--nointeraction"], { timeout: 120000 });
+      // `bw unlock` anywhere else (e.g. a manual exec) invalidates this key.
+      await run("bw", ["unlock", "--check", "--session", bwSessionKey], { timeout: 30000 });
+      await run("bw", ["sync", "--session", bwSessionKey], { timeout: 120000 });
       return bwSessionKey;
     } catch {
       bwSessionKey = null;
