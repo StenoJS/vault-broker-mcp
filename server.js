@@ -30,8 +30,11 @@ const execFileP = promisify(execFile);
 // Wrapper that never lets the command line (which can contain the bw session
 // key) end up in an error message that is returned to the model.
 async function run(cmd, args, opts = {}) {
+  const { input, ...rest } = opts;
   try {
-    return await execFileP(cmd, args, { maxBuffer: 16 * 1024 * 1024, ...opts });
+    const p = execFileP(cmd, args, { maxBuffer: 16 * 1024 * 1024, ...rest });
+    if (input !== undefined) p.child.stdin.end(input);
+    return await p;
   } catch (err) {
     const detail = String(err.stderr || "").trim().split("\n")[0].slice(0, 200);
     const reason = err.killed ? "timed out" : detail || `exit code ${err.code}`;
@@ -109,9 +112,7 @@ async function doUnlock() {
 // Runs `bw` with the JSON payload on stdin, so secrets never appear in the
 // process arguments.
 async function bwWithStdin(args, input) {
-  const p = run("bw", args);
-  p.child.stdin.end(input);
-  return p;
+  return run("bw", args, { input, timeout: 60000 });
 }
 
 // --- Scope guard ------------------------------------------------------
