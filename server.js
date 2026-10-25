@@ -79,8 +79,18 @@ let bwSessionKey = null;
 
 let bwUnlocking = null;
 
-function bwUnlock() {
-  if (bwSessionKey) return Promise.resolve(bwSessionKey);
+async function bwUnlock() {
+  // Every tool call starts with a sync, so items added or changed in
+  // Vaultwarden since the last call are visible. A failing sync usually means
+  // the session expired: drop it and do a full login + unlock.
+  if (bwSessionKey) {
+    try {
+      await run("bw", ["sync", "--session", bwSessionKey, "--nointeraction"], { timeout: 120000 });
+      return bwSessionKey;
+    } catch {
+      bwSessionKey = null;
+    }
+  }
   // One unlock at a time; parallel calls share the same attempt.
   bwUnlocking ??= doUnlock().finally(() => { bwUnlocking = null; });
   return bwUnlocking;
