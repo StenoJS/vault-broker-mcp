@@ -2,6 +2,7 @@ services:
   vault-broker-mcp:
     build: .
     image: vault-broker-mcp:latest
+    pull_policy: build  # image is built locally; never try to pull it (webhook/redeploy)
     container_name: vault-broker-mcp
     restart: unless-stopped
     environment:
