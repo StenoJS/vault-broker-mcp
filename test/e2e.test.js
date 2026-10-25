@@ -7,7 +7,7 @@ import { tmpdir } from "node:os";
 import { join, dirname } from "node:path";
 import { fileURLToPath } from "node:url";
 import { Client } from "@modelcontextprotocol/sdk/client/index.js";
-import { SSEClientTransport } from "@modelcontextprotocol/sdk/client/sse.js";
+import { StreamableHTTPClientTransport } from "@modelcontextprotocol/sdk/client/streamableHttp.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const ORG = "org-1", COLL = "coll-1", KEY = "test-key-123";
@@ -48,7 +48,7 @@ async function start(extraEnv = {}) {
 
 async function connect() {
   const client = new Client({ name: "t", version: "1" });
-  await client.connect(new SSEClientTransport(new URL(`http://127.0.0.1:${brokerPort}/sse?key=${KEY}`)));
+  await client.connect(new StreamableHTTPClientTransport(new URL(`http://127.0.0.1:${brokerPort}/mcp?key=${KEY}`)));
   return client;
 }
 const textOf = (r) => r.content[0].text;
@@ -78,11 +78,21 @@ before(async () => {
 
 after(() => { if (process.env.DEBUG_LOGS) console.error("BROKER LOGS:\n" + broker?.logs); broker?.kill(); portainer?.close(); });
 
-test("auth: wrong key is rejected", async () => {
-  const r = await fetch(`http://127.0.0.1:${brokerPort}/sse?key=nope`);
-  assert.equal(r.status, 401);
-  const r2 = await fetch(`http://127.0.0.1:${brokerPort}/sse`);
-  assert.equal(r2.status, 401);
+test("auth: wrong or missing key is rejected, GET is not served", async () => {
+  const init = { method: "POST", headers: { "Content-Type": "application/json", Accept: "application/json, text/event-stream" }, body: "{}" };
+  assert.equal((await fetch(`http://127.0.0.1:${brokerPort}/mcp?key=nope`, init)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${brokerPort}/mcp`, init)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${brokerPort}/mcp?key=nope`)).status, 401);
+  assert.equal((await fetch(`http://127.0.0.1:${brokerPort}/mcp?key=${KEY}`)).status, 405);
+  assert.equal((await fetch(`http://127.0.0.1:${brokerPort}/sse?key=${KEY}`)).status, 404);
+});
+
+test("many connections in a row do not crash the broker", async () => {
+  for (let i = 0; i < 5; i++) {
+    const c = await connect();
+    assert.equal((await c.listTools()).tools.length, 3);
+    await c.close();
+  }
 });
 
 test("tools: login is off by default, inject is on", async () => {

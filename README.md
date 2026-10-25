@@ -25,8 +25,11 @@ Gemeenschappelijke regels:
   type *login*. Kaarten, identiteiten en notities worden nooit getoond of gebruikt.
 - Een geheim komt nooit in een tool-antwoord, foutmelding of logregel, en niet in
   de argumenten van een `bw`-proces (payload gaat via stdin).
-- Elke SSE-verbinding krijgt een eigen `McpServer`-instantie (één gedeelde
-  instantie liet de container crashen bij de tweede verbinding).
+- Transport is **Streamable HTTP, stateless**: `POST /mcp?key=...`. Elk verzoek
+  krijgt een eigen `McpServer`-instantie (één gedeelde instantie liet de
+  container crashen bij de tweede verbinding). Legacy SSE (`/sse`,
+  `/messages`) wordt niet meer geserveerd. De variabele heet nog
+  `MCP_SSE_SECRET` om bestaande stack-omgevingen niet te breken.
 
 ## Vaultwarden-kant (handmatig, door Steno)
 
@@ -102,9 +105,9 @@ ingebakken.
 
 ## Beveiligingsnotities
 
-- MCP SSE-endpoint verwacht het secret als **query-param** (`?key=...`), niet
-  als pad-prefix — zie de bekende valkuil met `ah-mcp` (root-relatieve
-  callback-paden breken anders).
+- Het MCP-endpoint (`/mcp`) verwacht het secret als **query-param**
+  (`?key=...`), niet als pad-prefix. In NPM staat er bovendien dezelfde
+  sleutelcontrole plus de Anthropic-allowlist voor.
 - `list_credentials` filtert serverside altijd het `login.password`-veld
   eruit, ook als de Bitwarden CLI het teruggeeft — nooit vertrouwen op "de
   aanroeper vraagt er toch niet om".

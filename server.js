@@ -20,7 +20,7 @@ import { execFile } from "node:child_process";
 import { timingSafeEqual } from "node:crypto";
 import { promisify } from "node:util";
 import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
-import { SSEServerTransport } from "@modelcontextprotocol/sdk/server/sse.js";
+import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { z } from "zod";
 import { generatePassword } from "./generate.js";
 import { injectIntoStack, parseAllowedStacks, VAR_NAME_RE } from "./portainer.js";
@@ -131,9 +131,9 @@ const failed = (what) => text(`${what} failed. Check the broker's container logs
 
 // --- MCP server ----------------------------------------------------------
 
-// A McpServer instance can only be connected to ONE transport. Every SSE
-// connection therefore gets its own instance from this factory; sharing one
-// instance crashes the process on the second (re)connect.
+// A McpServer instance can only be connected to ONE transport. Every request
+// therefore gets its own instance from this factory; sharing one instance
+// crashes the process on the second connect.
 const loginModule = loginEnabled ? await import("./login.js") : null;
 
 if (!injectEnabled) {
@@ -322,7 +322,9 @@ if (loginEnabled) {
 return server;
 }
 
-// --- SSE transport, secret as query param (see README "Beveiligingsnotities") ---
+// --- Streamable HTTP transport (stateless), secret as query param ---------
+// One fresh McpServer + transport per request: no sessions to leak or crash,
+// and nothing shared between callers. Legacy SSE is intentionally not served.
 
 function keyMatches(provided) {
   if (typeof provided !== "string") return false;
@@ -332,29 +334,49 @@ function keyMatches(provided) {
 }
 
 const app = express();
-const transports = new Map();
 
 app.get("/healthz", (_req, res) => res.status(200).send("ok"));
 
-app.get("/sse", async (req, res) => {
+app.post("/mcp", express.json({ limit: "1mb" }), async (req, res) => {
   if (!keyMatches(req.query.key)) {
     res.status(401).end();
     return;
   }
-  const transport = new SSEServerTransport("/messages", res);
-  transports.set(transport.sessionId, transport);
-  res.on("close", () => transports.delete(transport.sessionId));
-  await createServer().connect(transport);
+  const server = createServer();
+  const transport = new StreamableHTTPServerTransport({
+    sessionIdGenerator: undefined,
+    enableJsonResponse: true,
+  });
+  res.on("close", () => {
+    transport.close();
+    server.close();
+  });
+  try {
+    await server.connect(transport);
+    await transport.handleRequest(req, res, req.body);
+  } catch {
+    if (!res.headersSent) {
+      res.status(500).json({
+        jsonrpc: "2.0",
+        error: { code: -32603, message: "Internal server error" },
+        id: null,
+      });
+    }
+  }
 });
 
-app.post("/messages", express.json(), async (req, res) => {
-  const transport = transports.get(req.query.sessionId);
-  if (!transport) {
-    res.status(400).send("Unknown session");
+// Stateless server: no standalone SSE stream (GET) and no sessions (DELETE).
+app.all("/mcp", (req, res) => {
+  if (!keyMatches(req.query.key)) {
+    res.status(401).end();
     return;
   }
-  await transport.handlePostMessage(req, res, req.body);
+  res.status(405).set("Allow", "POST").json({
+    jsonrpc: "2.0",
+    error: { code: -32000, message: "Method not allowed" },
+    id: null,
+  });
 });
 
 const port = process.env.PORT || 3000;
-app.listen(port, () => console.log(`vault-broker-mcp listening on :${port}`));
+app.listen(port, () => console.log(`vault-broker-mcp listening on :${port} (POST /mcp)`));
