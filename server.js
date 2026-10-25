@@ -151,7 +151,13 @@ const text = (obj, isError = false) => ({
 
 // Tool errors must not echo child-process output, which could contain the
 // payload. Report a fixed message plus the tool name.
-const failed = (what) => text(`${what} failed. Check the broker's container logs.`, true);
+const failed = (what, err) => {
+  // Only sanitised messages from run() ("bw <cmd>: <first stderr line>") are
+  // logged; anything else just gets the error class, never its text.
+  const msg = err && typeof err.message === "string" && err.message.startsWith("bw ") ? err.message : err?.name;
+  console.error(`${what} failed: ${msg ?? "unknown error"}`);
+  return text(`${what} failed. Check the broker's container logs.`, true);
+};
 
 // --- MCP server ----------------------------------------------------------
 
@@ -257,8 +263,8 @@ server.registerTool(
         passwordStored: true,
         passwordLength: password.length,
       });
-    } catch {
-      return failed("create_credential");
+    } catch (err) {
+      return failed("create_credential", err);
     }
   }
 );
