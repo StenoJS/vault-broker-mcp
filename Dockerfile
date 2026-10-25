@@ -14,7 +14,7 @@ RUN npm install -g @bitwarden/cli@2025.12.1
 WORKDIR /app
 COPY package.json package-lock.json* ./
 RUN npm install --omit=dev
-COPY server.js login.js ./
+COPY *.js ./
 
 EXPOSE 3000
 CMD ["node", "server.js"]

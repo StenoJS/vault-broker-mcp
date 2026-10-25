@@ -1,0 +1,37 @@
+#!/usr/bin/env node
+// Fake Bitwarden CLI for tests. State lives in $FAKE_BW_STATE (JSON).
+const fs = require("fs");
+const f = process.env.FAKE_BW_STATE;
+const st = JSON.parse(fs.readFileSync(f, "utf8"));
+const args = process.argv.slice(2);
+st.argvLog.push(args);
+const save = () => fs.writeFileSync(f, JSON.stringify(st));
+const [a, b] = args;
+if (a === "config" || a === "login" || a === "sync") { save(); process.exit(0); }
+if (a === "unlock") { save(); process.stdout.write("SESSIONKEY"); process.exit(0); }
+if (a === "list" && b === "items") {
+  save();
+  process.stdout.write(JSON.stringify(st.items.filter((i) => i.collectionIds.includes(st.collectionId))));
+  process.exit(0);
+}
+if (a === "get" && b === "item") {
+  const it = st.items.find((i) => i.id === args[2]);
+  save();
+  if (!it) { process.stderr.write("Not found."); process.exit(1); }
+  process.stdout.write(JSON.stringify(it));
+  process.exit(0);
+}
+if (a === "create" && b === "item") {
+  let data = "";
+  process.stdin.on("data", (d) => (data += d));
+  process.stdin.on("end", () => {
+    const item = JSON.parse(Buffer.from(data.trim(), "base64").toString());
+    item.id = "new-" + (st.items.length + 1);
+    st.items.push(item);
+    save();
+    process.stdout.write(JSON.stringify(item));
+  });
+  return;
+}
+process.stderr.write("unsupported: " + args.join(" "));
+process.exit(2);

@@ -12,6 +12,12 @@ services:
       VAULTWARDEN_ORG_ID: ${VAULTWARDEN_ORG_ID}
       VAULTWARDEN_COLLECTION_ID: ${VAULTWARDEN_COLLECTION_ID}
       MCP_SSE_SECRET: ${MCP_SSE_SECRET}
+      # Optioneel: inject_secret (alleen actief als alle drie gezet zijn)
+      PORTAINER_URL: ${PORTAINER_URL:-}
+      PORTAINER_API_KEY: ${PORTAINER_API_KEY:-}
+      INJECT_ALLOWED_STACKS: ${INJECT_ALLOWED_STACKS:-}
+      # login-tool (Playwright) staat standaard UIT
+      ENABLE_LOGIN: ${ENABLE_LOGIN:-false}
     networks:
       - hassio
     ports:

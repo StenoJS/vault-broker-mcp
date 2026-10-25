@@ -7,16 +7,26 @@ in zijn context krijgt.
 ## Waarom deze opzet
 
 Claude mag geen wachtwoorden lezen en zelf in formulieren typen. Deze broker
-lost dat op door **acties** aan te bieden in plaats van **waardes**:
+lost dat op door **acties** aan te bieden in plaats van **waardes**: Claude
+kiest *welk* item gebruikt wordt, de broker is de enige die de waarde ooit ziet.
 
-- `list_credentials` → geeft alleen niet-geheime metadata terug (naam,
-  gebruikersnaam, URL). Nooit het wachtwoord-veld.
-- `login` → krijgt een credential-ID + doel-URL, haalt het wachtwoord
-  *intern* op, vult het formulier zelf in (via Playwright) en geeft alleen
-  `{success, url}` terug. Het secret verlaat de container nooit.
+## Tools (v0.2)
 
-Zo blijft de scheiding hard: Claude kiest *welk* item gebruikt wordt, de
-broker is de enige die de waarde ooit ziet.
+| Tool | Standaard | Wat het doet |
+| --- | --- | --- |
+| `list_credentials` | aan | Alleen metadata (id, naam, gebruikersnaam, URL's) van login-items in de gedeelde collectie. Nooit een wachtwoord. |
+| `create_credential` | aan | Genereert een sterk wachtwoord **in de broker** en slaat het op als nieuw login-item in de collectie. Geeft het wachtwoord niet terug. Weigert een bestaande naam (geen overschrijven). |
+| `inject_secret` | alleen met `PORTAINER_URL`, `PORTAINER_API_KEY` en `INJECT_ALLOWED_STACKS` | Zet het opgeslagen wachtwoord in **één** variabele van een stack uit de allow-list (herdeployt die stack). Geeft de waarde niet terug. Alleen standalone compose-stacks, geen git-stacks. |
+| `login` | **uit** (`ENABLE_LOGIN=true` om aan te zetten) | Vult een webformulier in via Playwright en geeft alleen succes/falen terug. |
+
+Gemeenschappelijke regels:
+
+- Alles is beperkt tot **één organisatie + één collectie** en tot items van het
+  type *login*. Kaarten, identiteiten en notities worden nooit getoond of gebruikt.
+- Een geheim komt nooit in een tool-antwoord, foutmelding of logregel, en niet in
+  de argumenten van een `bw`-proces (payload gaat via stdin).
+- Elke SSE-verbinding krijgt een eigen `McpServer`-instantie (één gedeelde
+  instantie liet de container crashen bij de tweede verbinding).
 
 ## Vaultwarden-kant (handmatig, door Steno)
 
@@ -44,8 +54,9 @@ instellen is voor Claude verboden terrein, ook met toestemming).
 ## Broker-kant (dit scaffold)
 
 - `Dockerfile` — Node 20, installeert de Bitwarden CLI (`bw`).
-- `server.js` — MCP-server (SSE), twee tools: `list_credentials`, `login`
-  (login is nu een stub met TODO's, zie hieronder).
+- `server.js` — MCP-server (SSE), tools: zie tabel hierboven.
+- `generate.js` / `portainer.js` — wachtwoordgenerator en Portainer-injectie.
+- `test/` — `npm test` (unit + end-to-end met een nep-`bw` en nep-Portainer).
 - `docker-compose.yml` — draait op het gedeelde `hassio`-netwerk, net als je
   andere self-hosted MCP-servers. **Niet** publiek via NPM ontsluiten — dit
   is een secrets-gateway, alleen intern/via Tailscale bereikbaar houden.
@@ -53,10 +64,9 @@ instellen is voor Claude verboden terrein, ook met toestemming).
 ### Nog te doen voordat dit bruikbaar is
 
 - [ ] `.env` invullen (zie `.env.example`) zodra stap 1–6 hierboven klaar zijn.
-- [ ] `login`-tool afmaken: nu roept hij nog geen echte Playwright-instance
-  aan. Meest voor de hand liggend: laten praten met je bestaande
-  `playwright-mcp`-containers (`playwright-amazon-mcp`, `playwright-bol-mcp`)
-  of een eigen headless Playwright-instance in dezelfde container.
+- [ ] `create_credential` (aanmaken in een organisatie-collectie via
+  `bw create item`) is getest tegen een nep-`bw`, **nog niet tegen de echte
+  Vaultwarden**. Eerste echte test: één item aanmaken en in de UI controleren.
 - [ ] Testen met één laag-risico item voordat er meer gedeeld wordt.
 - [ ] Pas als dit werkt: als Portainer-stack deployen (met jouw akkoord, dit
   raak ik niet zelf aan zonder te vragen).
