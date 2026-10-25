@@ -1,7 +1,7 @@
 {
   "name": "vault-broker-mcp",
   "version": "0.2.0",
-  "description": "Scoped MCP broker for Vaultwarden credentials — never returns plaintext secrets to the model.",
+  "description": "Scoped MCP broker for Vaultwarden credentials \u2014 never returns plaintext secrets to the model.",
   "main": "server.js",
   "type": "module",
   "scripts": {
@@ -11,7 +11,9 @@
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.5.0",
     "express": "^4.19.2",
-    "playwright": "^1.48.0",
     "zod": "^3.23.8"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.48.0"
   }
 }

@@ -1,9 +1,9 @@
-# NOT node:20-alpine: Playwright's Chromium doesn't run reliably on musl
-# libc/Alpine, and `playwright install --with-deps` only knows apt, not apk.
-# Use the official Playwright image (same family as playwright-amazon-mcp/
-# playwright-bol-mcp) — Chromium + OS deps already baked in, matching our
-# pinned `playwright` npm version.
-FROM mcr.microsoft.com/playwright:v1.48.0-jammy
+# Slim Node 22 image. The Bitwarden CLI (2025.12.x) needs Node >= 20.19
+# (it require()s an ES module); the old Playwright jammy image shipped
+# Node 20.18 and `bw` crashed there with ERR_REQUIRE_ESM before it could log in.
+# Playwright's Chromium is NOT included: the optional `login` tool
+# (ENABLE_LOGIN=true) needs an image that has it — see README.
+FROM node:22-bookworm-slim
 
 # Bitwarden CLI (talks to our self-hosted Vaultwarden instance).
 # Pinned, NOT @latest: the newest official CLI can crash (WASM panic during
@@ -13,8 +13,11 @@ RUN npm install -g @bitwarden/cli@2025.12.1
 
 WORKDIR /app
 COPY package.json package-lock.json* ./
-RUN npm install --omit=dev
+RUN npm install --omit=dev --omit=optional && npm cache clean --force
 COPY *.js ./
 
+# Run unprivileged; `bw` keeps its session data under $HOME.
+USER node
+ENV HOME=/home/node
 EXPOSE 3000
 CMD ["node", "server.js"]

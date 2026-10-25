@@ -17,7 +17,7 @@ kiest *welk* item gebruikt wordt, de broker is de enige die de waarde ooit ziet.
 | `list_credentials` | aan | Alleen metadata (id, naam, gebruikersnaam, URL's) van login-items in de gedeelde collectie. Nooit een wachtwoord. |
 | `create_credential` | aan | Genereert een sterk wachtwoord **in de broker** en slaat het op als nieuw login-item in de collectie. Geeft het wachtwoord niet terug. Weigert een bestaande naam (geen overschrijven). |
 | `inject_secret` | alleen met `PORTAINER_URL`, `PORTAINER_API_KEY` en `INJECT_ALLOWED_STACKS` | Zet het opgeslagen wachtwoord in **één** variabele van een stack uit de allow-list (herdeployt die stack). Geeft de waarde niet terug. Alleen standalone compose-stacks, geen git-stacks. |
-| `login` | **uit** (`ENABLE_LOGIN=true` om aan te zetten) | Vult een webformulier in via Playwright en geeft alleen succes/falen terug. |
+| `login` | **uit** (`ENABLE_LOGIN=true` om aan te zetten) | Vult een webformulier in via Playwright en geeft alleen succes/falen terug. Werkt alleen in een image mét Playwright/Chromium; de standaard-image (`node:22-bookworm-slim`) heeft die niet. |
 
 Gemeenschappelijke regels:
 
@@ -56,7 +56,7 @@ instellen is voor Claude verboden terrein, ook met toestemming).
 
 ## Broker-kant (dit scaffold)
 
-- `Dockerfile` — Node 20, installeert de Bitwarden CLI (`bw`).
+- `Dockerfile` — `node:22-bookworm-slim`, installeert de Bitwarden CLI (`bw`), draait als gebruiker `node`.
 - `server.js` — MCP-server (SSE), tools: zie tabel hierboven.
 - `generate.js` / `portainer.js` — wachtwoordgenerator en Portainer-injectie.
 - `test/` — `npm test` (unit + end-to-end met een nep-`bw` en nep-Portainer).
@@ -94,7 +94,9 @@ ingelogd is ("Logout required before server config update") — het lokale
 de sessie ook tussen verschillende CLI-versies in. Altijd `bw logout`
 (fouten negeren) vóór `bw config server` in scripts.
 
-**Derde addertje**: `node:20-alpine` als base image laat de build wel
+**Vierde addertje (opgelost in v0.2)**: de `bw`-CLI 2025.12.x heeft Node ≥ 20.19 nodig. In de oude `playwright:v1.48.0-jammy`-image (Node 20.18) crashte elk `bw`-commando met `ERR_REQUIRE_ESM`, dus de broker kon nooit inloggen. Daarom nu `node:22-bookworm-slim`.
+
+**Derde addertje** (historisch, gold voor de oude image): `node:20-alpine` als base image laat de build wel
 slagen, maar Playwright's Chromium draait niet betrouwbaar op musl
 libc/Alpine, en `playwright install --with-deps` kent alleen `apt`, geen
 `apk`. Ontdekt pas bij de eerste Portainer-deploy (lokaal getest zonder

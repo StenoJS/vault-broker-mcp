@@ -53,7 +53,7 @@ for (const [name, val] of Object.entries({
 
 const allowedStacks = parseAllowedStacks(INJECT_ALLOWED_STACKS);
 const injectEnabled = Boolean(PORTAINER_URL && PORTAINER_API_KEY && allowedStacks.size > 0);
-const loginEnabled = ENABLE_LOGIN === "true";
+let loginEnabled = ENABLE_LOGIN === "true";
 
 // --- Bitwarden CLI session handling -----------------------------------
 // Session key lives only in memory for this process, never logged, never
@@ -134,7 +134,16 @@ const failed = (what) => text(`${what} failed. Check the broker's container logs
 // A McpServer instance can only be connected to ONE transport. Every request
 // therefore gets its own instance from this factory; sharing one instance
 // crashes the process on the second connect.
-const loginModule = loginEnabled ? await import("./login.js") : null;
+let loginModule = null;
+if (loginEnabled) {
+  try {
+    loginModule = await import("./login.js");
+  } catch {
+    // Playwright (and its Chromium) is not part of the slim image.
+    console.error("ENABLE_LOGIN=true but Playwright is not available in this image; login tool stays disabled");
+    loginEnabled = false;
+  }
+}
 
 if (!injectEnabled) {
   console.log("inject_secret disabled (set PORTAINER_URL, PORTAINER_API_KEY and INJECT_ALLOWED_STACKS to enable)");
